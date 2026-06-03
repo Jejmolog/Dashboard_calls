@@ -171,13 +171,19 @@ const PROXIES = [
   url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
 ];
 
+// Add cache-busting timestamp to URL so Google doesn't serve stale data
+function bustCache(url) {
+  const sep = url.includes('?') ? '&' : '?';
+  return url + sep + '_cb=' + Date.now();
+}
+
 async function fetchWithProxies(url) {
+  const freshUrl = bustCache(url);
   for (const proxy of PROXIES) {
     try {
-      const res = await fetch(proxy(url), { signal: AbortSignal.timeout(8000) });
+      const res = await fetch(proxy(freshUrl), { signal: AbortSignal.timeout(8000) });
       if (!res.ok) continue;
       const text = await res.text();
-      // Validate it looks like CSV with our headers
       if (text.includes('month') && text.includes('name')) return text;
     } catch(e) { /* try next */ }
   }
@@ -224,7 +230,7 @@ async function fetchData() {
     cachedRows = parseCSV(text);
     localStorage.setItem(CACHE_KEY, JSON.stringify(cachedRows));
     const now = new Date();
-    setStatus('ok', 'Обновлено в ' + now.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'}));
+    setStatus('ok', 'Обновлено в ' + now.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'}) + ' · следующее через 5 мин');
     renderDashboard();
   } catch(e) {
     const cached = localStorage.getItem(CACHE_KEY);
@@ -311,6 +317,9 @@ function renderDashboard() {
 // Init
 const saved = localStorage.getItem(STORE_KEY);
 if (saved) { sheetUrl = saved; showDashboard(); fetchData(); }
+
+// Auto-refresh every 5 minutes
+setInterval(() => { if (sheetUrl) fetchData(); }, 5 * 60 * 1000);
 </script>
 </body>
 </html>
